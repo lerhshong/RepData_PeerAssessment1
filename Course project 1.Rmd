@@ -1,0 +1,73 @@
+---
+title: "Reproducible research 1"
+author: "Lerh Shong"
+date: "October 19, 2016"
+output: html_document
+---
+setwd("C:/Users/lerhshong/Desktop/For Elysium/Coursera/5. Reproducible Research")
+
+```{r}
+library(data.table)
+data <- fread("activity.csv") 
+str(data)
+```
+
+To get the total number, average and median of steps per day, we use data.table's functionality. Note that the setup is such that "V1" is the object of interest in the subsequent code, e.g. V1 is 'median' or 'mean' or 'total', depending on the context.
+
+```{r}
+total <- data[,sum(steps,na.rm=TRUE),by=date]
+mean <- data[,mean(steps,na.rm=TRUE),by=date]
+median <- data[,median(as.double(steps),na.rm=TRUE),by=date]
+# Histogram of total number of steps each day
+suppressWarnings(require(ggplot2))
+suppressMessages(qplot(V1,data=total) + labs(x = "Total number of steps"))
+head(mean)
+head(median) # Used head instead of print the whole thing to save space.
+```
+
+Now we'll do the time series part. 
+```{r}
+timeseries <- ts(data=mean[,V1],start=c(2012,10,1),frequency=365)
+plot(timeseries,ylab="Average number of steps")
+which.max(timeseries)
+```
+
+Those missing parts of the time series are days where there were missing values.  
+The next demand is the five minute interval that had on average, the most number of steps.  
+Again, we use data.table to help us out:
+
+### Interval with the largest number of steps walked on average
+```{r}
+intervals <- data[,mean(steps,na.rm=TRUE),by=interval]
+which.max(intervals$V1)
+```
+Hence the 104th time interval is the one which has the highest number of steps walked on average.  
+We didn't actually impute the data, but if we had to then there are 13% missing data: 
+```{r}
+x <- sapply(data,function(x) sum(is.na(x))) 
+x # 2304 missing values, 17568 rows.
+```
+
+
+This could be imputed by perhaps the mean or the median of the steps taken. For simplicity, we can impute based on mean across whole data:
+
+### Imputing
+```{r}
+data[, steps := replace(steps,is.na(steps),mean(steps,na.rm=TRUE))]
+imputedtotal <- data[,sum(steps,na.rm=TRUE),by=date]
+suppressMessages(qplot(V1,data=imputedtotal))
+```
+
+If we wanted to, we could have imputed by mean based on interval or day, or take the average of the two closest days as suggested by the time series. This is just an example.
+
+### By weekdays and weekends
+```{r}
+suppressMessages(require(lubridate))
+daydata <- data[,day := as.character(wday(date))] # 1 = Sun, 2 = Mon etc.
+daydata[day >5,day := "weekend"]
+daydata[day != "weekend", day := "weekday"]
+daydata$day <- as.factor(daydata$day)
+daytotal <- daydata[,.(mean(steps)),by = .(day,date,interval)] # Average of steps by days
+ggplot(aes(interval,V1),data=daytotal) + geom_line() + facet_wrap(~day)
+```
+
